@@ -4,8 +4,9 @@ Production-style FastAPI backend for a cybersecurity SaaS portfolio dashboard. T
 
 ## Features
 
-- FastAPI REST API with `/`, `/health`, `/scan`, and `/scan/{scan_id}`
-- WebSocket stream at `/ws/scan/{scan_id}` for live logs, progress, findings, and completion events
+- Versioned FastAPI REST API with `/v1/health`, `/v1/health/detailed`, `/v1/scan`, and `/v1/scan/{scan_id}`
+- Backward-compatible legacy REST routes at `/health`, `/scan`, and `/scan/{scan_id}`
+- WebSocket stream at `/v1/ws/scan/{scan_id}` for live logs, progress, findings, and completion events
 - Real Nmap integration through a safe subprocess boundary plus `python-nmap` XML parsing support
 - Target validation for hostnames, IP addresses, and small CIDR ranges
 - Default private-network scanning policy to reduce abuse risk
@@ -19,7 +20,8 @@ Production-style FastAPI backend for a cybersecurity SaaS portfolio dashboard. T
 ```text
 app/
   main.py                 FastAPI app factory, CORS, app state wiring
-  api/routes.py           REST endpoints
+  api/routes.py           Root endpoint
+  api/v1/routes.py        Versioned REST endpoints
   websocket/routes.py     WebSocket scan event stream
   core/config.py          Environment-driven settings
   core/targeting.py       Target and port validation
@@ -42,13 +44,17 @@ The current store is intentionally in-memory for portfolio/local development. Fo
 
 ### `GET /`
 
-Returns a small service index with links to `/health` and `/docs`.
+Returns a small service index with links to `/v1/health` and `/docs`.
 
-### `GET /health`
+### `GET /v1/health`
 
-Returns API status, environment, active scan engine, Nmap availability, and target policy.
+Returns API status, version, readiness, environment, active scan engine, Nmap availability, and target policy.
 
-### `POST /scan`
+### `GET /v1/health/detailed`
+
+Returns readiness plus environment validation, dependency checks, uptime, and basic system diagnostics.
+
+### `POST /v1/scan`
 
 Starts an asynchronous scan.
 
@@ -72,16 +78,16 @@ Response:
   "scan_id": "example",
   "status": "queued",
   "target": "127.0.0.1",
-  "websocket_url": "/ws/scan/example",
+  "websocket_url": "/v1/ws/scan/example",
   "message": "Scan accepted and queued."
 }
 ```
 
-### `GET /scan/{scan_id}`
+### `GET /v1/scan/{scan_id}`
 
 Returns the current scan record and, after completion, the structured result.
 
-### `WS /ws/scan/{scan_id}`
+### `WS /v1/ws/scan/{scan_id}`
 
 Streams JSON events:
 
@@ -104,16 +110,19 @@ Copy `.env.example` to `.env` for local development.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `ENV_MODE` | `development` | Runtime mode, for example `development`, `docker`, or `production`. Legacy `AEGIS_ENVIRONMENT` is still accepted. |
+| `LOG_LEVEL` | `INFO` | Python logging level. Legacy `AEGIS_LOG_LEVEL` is still accepted. |
 | `AEGIS_SCAN_ENGINE` | `nmap` | Use `nmap` for real scans or `mock` for local UI/test demos without Nmap. |
 | `AEGIS_ALLOWED_TARGET_MODE` | `private` | `private` allows localhost/private IPs; `any` should only be used for authorized networks. |
 | `AEGIS_MAX_SCAN_HOSTS` | `16` | Maximum CIDR size accepted by the API. |
 | `AEGIS_NMAP_PATH` | empty | Optional explicit path to `nmap.exe`. If unset on Windows, the API checks `C:\Program Files (x86)\Nmap\nmap.exe`, then `C:\Program Files\Nmap\nmap.exe`, then PATH. |
-| `AEGIS_LOG_LEVEL` | `INFO` | Python logging level. Logs are emitted as structured JSON. |
 | `AEGIS_ENABLE_OS_DETECTION` | `false` | Enables `-O`; often needs elevated/container capabilities. |
 | `AEGIS_ENABLE_VULN_SCRIPTS` | `false` | Enables configured Nmap vuln scripts. Keep opt-in. |
 | `AEGIS_NMAP_VULN_SCRIPT_SELECTOR` | `vuln` | Script selector used when vuln scripts are enabled. |
 | `ALLOWED_ORIGINS` | localhost frontend URLs | Comma-separated browser origins allowed to call the API. Required for production. `AEGIS_CORS_ORIGINS` is still accepted for backward compatibility. |
 | `AEGIS_LOCAL_HOSTNAMES` | `localhost,host.docker.internal` | Hostnames allowed under private target policy. |
+| `VITE_API_URL` | `http://127.0.0.1:8000/v1` | Frontend REST API base URL. Use `/v1` when the nginx frontend proxies to the backend in Docker. |
+| `VITE_WS_URL` | `ws://127.0.0.1:8000/v1` | Frontend WebSocket API base URL. Use `/v1` when the nginx frontend proxies to the backend in Docker. |
 
 ## Local Development
 
@@ -173,21 +182,23 @@ Build and run:
 docker compose up --build
 ```
 
-The API will be available to the browser at:
+The full stack will be available at:
 
 ```text
-http://localhost:8000
-ws://localhost:8000/ws/scan/{scan_id}
+Frontend: http://localhost:5173
+Backend:  http://localhost:8000/v1
+WebSocket: ws://localhost:8000/v1/ws/scan/{scan_id}
 ```
 
-The compose file uses normal bridge networking and publishes `8000:8000`. Browser-based frontends should use `localhost:8000` because the browser runs on the host, not inside the Docker network.
+The compose file uses normal bridge networking. The frontend container serves the Vite build with nginx and proxies `/v1` and `/v1/ws` to the API container, so the browser can use same-origin API paths in containerized deployment.
 
-If a frontend is also containerized in the same compose network, it can call the API service as:
+The backend image includes Nmap. For local Docker runs, Nmap is resolved from PATH inside the API container.
 
-```text
-http://api:8000
-ws://api:8000/ws/scan/{scan_id}
-```
+Use environment variables or a local `.env` file to override ports, CORS origins, target policy, and frontend API URLs.
+
+## CI
+
+GitHub Actions runs on every push and pull request. The workflow installs backend dependencies, validates Python imports, runs the backend test suite, installs frontend dependencies, lints the frontend, and builds the Vite app.
 
 Do not use `network_mode: host` for this project by default. It behaves differently across Linux, macOS, and Windows and can make the portfolio harder to reproduce.
 
@@ -242,8 +253,8 @@ The React dashboard lives in `frontend/`. From the project root, run
 The React frontend uses these environment variables:
 
 ```env
-VITE_API_URL=http://127.0.0.1:8000
-VITE_WS_URL=ws://127.0.0.1:8000
+VITE_API_URL=http://127.0.0.1:8000/v1
+VITE_WS_URL=ws://127.0.0.1:8000/v1
 ```
 
 Expected frontend flow:
@@ -254,7 +265,7 @@ Expected frontend flow:
 4. Render `log` events as terminal output.
 5. Render `progress` events in progress UI.
 6. Render `finding` events immediately.
-7. On `completed`, use the included result payload or call `GET /scan/${scan_id}` for the canonical record.
+7. On `completed`, use the included result payload or call `GET ${VITE_API_URL}/scan/${scan_id}` for the canonical record.
 
 CORS must include the frontend dev origin, usually `http://localhost:5173` for Vite.
 

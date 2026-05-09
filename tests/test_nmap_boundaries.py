@@ -33,7 +33,7 @@ def test_nmap_command_uses_safe_defaults_when_privileged_options_disabled():
         options=ScanOptions(top_ports=10, os_detection=True, vuln_scripts=True),
     )
 
-    command = scanner._build_command(request, Path("scan.xml"), "C:\\Program Files\\Nmap\\nmap.exe")
+    command = scanner._build_command(request, Path("scan.xml"), "nmap.exe")
 
     assert "-sV" in command
     assert "-O" not in command
@@ -51,9 +51,9 @@ def test_nmap_path_resolver_accepts_explicit_executable(monkeypatch):
 def test_nmap_path_resolver_treats_legacy_nmap_value_as_auto_detect(monkeypatch):
     monkeypatch.setenv("AEGIS_NMAP_PATH", "nmap")
     monkeypatch.setattr(nmap_resolver, "WINDOWS_COMMON_NMAP_PATHS", ())
-    monkeypatch.setattr(nmap_resolver.shutil, "which", lambda _: "C:\\Program Files\\Nmap\\nmap.exe")
+    monkeypatch.setattr(nmap_resolver.shutil, "which", lambda _: "resolved-nmap.exe")
 
-    assert get_nmap_path() == "C:\\Program Files\\Nmap\\nmap.exe"
+    assert get_nmap_path() == "resolved-nmap.exe"
 
 
 def test_nmap_path_resolver_fails_clearly(monkeypatch):

@@ -13,7 +13,7 @@ if (-not (Test-Path $FrontendScript)) {
 }
 
 Write-Host "Starting AEGIS backend and frontend in separate PowerShell windows..."
-Write-Host "Backend:  http://127.0.0.1:8000"
+Write-Host "Backend:  http://127.0.0.1:8000/v1"
 Write-Host "Frontend: http://127.0.0.1:5173"
 
 Start-Process powershell.exe -ArgumentList @(

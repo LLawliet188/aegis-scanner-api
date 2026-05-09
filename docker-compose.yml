@@ -2,19 +2,47 @@ services:
   api:
     build:
       context: .
+      dockerfile: Dockerfile
     container_name: aegis-scanner-api
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${AEGIS_PORT:-8000}:8000"
     environment:
-      AEGIS_ENVIRONMENT: docker
-      AEGIS_SCAN_ENGINE: nmap
-      AEGIS_ALLOWED_TARGET_MODE: private
-      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
-      AEGIS_LOCAL_HOSTNAMES: localhost,host.docker.internal
-      AEGIS_ENABLE_OS_DETECTION: "false"
-      AEGIS_ENABLE_VULN_SCRIPTS: "false"
+      ENV_MODE: ${ENV_MODE:-docker}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      AEGIS_SCAN_ENGINE: ${AEGIS_SCAN_ENGINE:-nmap}
+      AEGIS_ALLOWED_TARGET_MODE: ${AEGIS_ALLOWED_TARGET_MODE:-private}
+      AEGIS_MAX_SCAN_HOSTS: ${AEGIS_MAX_SCAN_HOSTS:-16}
+      AEGIS_NMAP_PATH: ${AEGIS_NMAP_PATH:-}
+      AEGIS_ENABLE_OS_DETECTION: ${AEGIS_ENABLE_OS_DETECTION:-false}
+      AEGIS_ENABLE_VULN_SCRIPTS: ${AEGIS_ENABLE_VULN_SCRIPTS:-false}
+      AEGIS_LOCAL_HOSTNAMES: ${AEGIS_LOCAL_HOSTNAMES:-localhost,host.docker.internal}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - aegis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/v1}
+        VITE_WS_URL: ${VITE_WS_URL:-/v1}
+    container_name: aegis-scanner-frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
     networks:
       - aegis
 

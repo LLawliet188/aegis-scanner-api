@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class NmapScanner:
+    """Run bounded Nmap scans and translate XML output into API scan results."""
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 

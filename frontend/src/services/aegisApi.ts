@@ -1,13 +1,25 @@
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
-const requireEnv = (value: string | undefined, name: string) => {
-  if (!value) {
-    throw new Error(`${name} is required. Set it in frontend/.env or your deployment environment.`);
+const absoluteWebSocketUrl = (value: string) => {
+  if (/^wss?:\/\//i.test(value)) {
+    return value;
   }
-  return value;
+
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const path = value.startsWith("/") ? value : `/${value}`;
+  return `${protocol}://${window.location.host}${path}`;
 };
 
-export const API_URL = normalizeBaseUrl(requireEnv(import.meta.env.VITE_API_URL, "VITE_API_URL"));
-export const WS_URL = normalizeBaseUrl(import.meta.env.VITE_WS_URL ?? API_URL.replace(/^http/, "ws"));
+const requireApiUrl = () => {
+  if (!API_URL) {
+    throw new Error("VITE_API_URL is required. Set it in frontend/.env or your deployment environment.");
+  }
+  return API_URL;
+};
+
+export const API_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL ?? "");
+export const WS_URL = normalizeBaseUrl(
+  absoluteWebSocketUrl(import.meta.env.VITE_WS_URL ?? API_URL.replace(/^http/, "ws")),
+);
 
 export type ScanStatus = "queued" | "running" | "completed" | "failed";
 
@@ -70,7 +82,7 @@ export type ScanEvent = {
 };
 
 export const startScan = async (target: string): Promise<ScanAcceptedResponse> => {
-  const response = await fetch(`${API_URL}/scan`, {
+  const response = await fetch(`${requireApiUrl()}/scan`, {
     body: JSON.stringify({
       target,
       options: {

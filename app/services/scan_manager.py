@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 class ScanManager:
+    """Coordinate scan records, scanner execution, enrichment, and event streaming."""
+
     def __init__(
         self,
         store: ScanStore,

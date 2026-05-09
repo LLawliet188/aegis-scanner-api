@@ -22,10 +22,11 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Aegis Scanner API"
-    environment: str = "development"
+    app_version: str = "0.2.0"
+    environment: str = Field(default="development", validation_alias=AliasChoices("ENV_MODE", "AEGIS_ENVIRONMENT"))
     host: str = "0.0.0.0"
     port: int = 8000
-    log_level: str = "INFO"
+    log_level: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL", "AEGIS_LOG_LEVEL"))
 
     scan_engine: Literal["nmap", "mock"] = "nmap"
     allowed_target_mode: Literal["private", "any"] = "private"

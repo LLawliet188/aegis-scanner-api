@@ -32,6 +32,7 @@ def _read_env_value(name: str) -> str:
 
 
 def find_nmap_path() -> str | None:
+    """Return the first usable Nmap executable path without raising."""
     env_path = _read_env_value("AEGIS_NMAP_PATH")
     if env_path and env_path.lower() not in {"nmap", "nmap.exe"}:
         return _valid_executable(env_path)
@@ -50,6 +51,7 @@ def find_nmap_path() -> str | None:
 
 
 def get_nmap_path() -> str:
+    """Return a usable Nmap executable path or fail with an operator-friendly error."""
     nmap_path = find_nmap_path()
     if not nmap_path:
         raise RuntimeError(NMAP_NOT_INSTALLED_MESSAGE)

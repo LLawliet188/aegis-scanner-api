@@ -12,6 +12,17 @@ def test_allowed_origins_reads_unprefixed_env(monkeypatch):
     assert settings.allowed_origins == ["https://aegis.example", "https://dashboard.example"]
 
 
+def test_env_mode_and_log_level_read_unprefixed_env(monkeypatch):
+    monkeypatch.setenv("ENV_MODE", "production")
+    monkeypatch.setenv("LOG_LEVEL", "warning")
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://dashboard.example")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.environment == "production"
+    assert settings.log_level == "WARNING"
+
+
 def test_production_rejects_wildcard_cors(monkeypatch):
     monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
     monkeypatch.delenv("AEGIS_CORS_ORIGINS", raising=False)
