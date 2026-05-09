@@ -1,16 +1,24 @@
 import asyncio
+from collections import OrderedDict
 from datetime import UTC, datetime
 
 from app.models.scan import ScanRecord, ScanResult, ScanStatus
 
+_DEFAULT_MAX_SIZE = 1000
+
 
 class ScanStore:
-    def __init__(self) -> None:
-        self._records: dict[str, ScanRecord] = {}
+    """In-memory scan record store with LRU eviction to prevent unbounded growth."""
+
+    def __init__(self, max_size: int = _DEFAULT_MAX_SIZE) -> None:
+        self._records: OrderedDict[str, ScanRecord] = OrderedDict()
         self._lock = asyncio.Lock()
+        self._max_size = max_size
 
     async def create(self, record: ScanRecord) -> None:
         async with self._lock:
+            if len(self._records) >= self._max_size:
+                self._records.popitem(last=False)
             self._records[record.scan_id] = record
 
     async def get(self, scan_id: str) -> ScanRecord | None:
@@ -40,3 +48,6 @@ class ScanStore:
             self._records[scan_id] = updated
             return updated.model_copy(deep=True)
 
+    @property
+    def size(self) -> int:
+        return len(self._records)

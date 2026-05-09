@@ -21,3 +21,14 @@ class DetailedHealthResponse(HealthResponse):
     environment_valid: bool
     dependencies: dict[str, DependencyStatus]
     system: dict[str, str | int | float | bool | None]
+    memory: dict[str, float | int | None]
+    cpu_percent: float | None
+
+
+class MetricsResponse(BaseModel):
+    uptime_seconds: float
+    requests_total: int
+    errors_total: int
+    error_rate: float
+    active_scans: int
+    scans_total: int

@@ -26,12 +26,19 @@ jobs:
       - name: Validate backend imports
         run: python -m compileall app tests
 
-      - name: Run backend tests
+      - name: Run backend unit tests
         env:
           AEGIS_SCAN_ENGINE: mock
           AEGIS_ALLOWED_TARGET_MODE: private
           ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
-        run: python -m pytest
+        run: python -m pytest tests/ --ignore=tests/load -v
+
+      - name: Run load + resilience tests
+        env:
+          AEGIS_SCAN_ENGINE: mock
+          AEGIS_ALLOWED_TARGET_MODE: private
+          ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+        run: python -m pytest tests/load/ -v --tb=short
 
   frontend:
     name: Frontend
@@ -83,15 +90,21 @@ jobs:
 
       - name: Validate health endpoint through nginx
         run: |
-          for attempt in {1..30}; do
+          for attempt in {1..40}; do
             if curl -fsS http://localhost:8000/v1/health; then
               exit 0
             fi
             docker compose ps
-            sleep 2
+            sleep 3
           done
           docker compose logs
           exit 1
+
+      - name: Validate metrics endpoint through nginx
+        run: curl -fsS http://localhost:8000/v1/metrics | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'uptime_seconds' in d, d"
+
+      - name: Validate detailed health endpoint through nginx
+        run: curl -fsS http://localhost:8000/v1/health/detailed | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'memory' in d, d"
 
       - name: Validate WebSocket route through nginx
         run: |
@@ -116,6 +129,11 @@ jobs:
 
           asyncio.run(main())
           PY
+
+      - name: Validate X-Request-ID header is echoed
+        run: |
+          RESPONSE=$(curl -fsS -D - http://localhost:8000/v1/health)
+          echo "$RESPONSE" | grep -i "x-request-id"
 
       - name: Stop Docker stack
         if: always()

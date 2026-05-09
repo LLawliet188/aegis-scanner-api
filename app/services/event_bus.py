@@ -4,9 +4,11 @@ from collections.abc import AsyncIterator
 
 from app.models.events import ScanEvent
 
+_DEFAULT_HISTORY_SIZE = 200
+
 
 class EventBus:
-    def __init__(self, history_size: int = 200) -> None:
+    def __init__(self, history_size: int = _DEFAULT_HISTORY_SIZE) -> None:
         self._history_size = history_size
         self._history: dict[str, deque[ScanEvent]] = defaultdict(lambda: deque(maxlen=history_size))
         self._subscribers: dict[str, set[asyncio.Queue[ScanEvent]]] = defaultdict(set)
@@ -37,3 +39,8 @@ class EventBus:
             async with self._lock:
                 self._subscribers.get(scan_id, set()).discard(queue)
 
+    async def cleanup(self, scan_id: str) -> None:
+        """Release history and subscriber entries for a finished scan."""
+        async with self._lock:
+            self._history.pop(scan_id, None)
+            self._subscribers.pop(scan_id, None)

@@ -9,8 +9,10 @@ from app.api.routes import router as root_router
 from app.api.v1.routes import router as v1_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.middleware.request_id import RequestIDMiddleware
 from app.services.cve_service import CveEnrichmentService
 from app.services.event_bus import EventBus
+from app.services.metrics import MetricsCollector
 from app.services.mock_scanner import MockScanner
 from app.services.nmap_runner import NmapScanner
 from app.services.scan_manager import ScanManager
@@ -34,18 +36,22 @@ def create_app() -> FastAPI:
     scanner = build_scanner(settings)
     cve_service = CveEnrichmentService()
 
+    metrics = MetricsCollector()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.settings = settings
         app.state.started_at = datetime.now(UTC)
         app.state.event_bus = event_bus
         app.state.scan_store = store
+        app.state.metrics = metrics
         app.state.scan_manager = ScanManager(
             store=store,
             event_bus=event_bus,
             scanner=scanner,
             cve_service=cve_service,
             settings=settings,
+            metrics=metrics,
         )
         logger.info(
             "app_started",
@@ -65,6 +71,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_middleware(RequestIDMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,

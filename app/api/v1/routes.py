@@ -2,9 +2,14 @@ import platform
 import sys
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from app.models.health import DependencyStatus, DetailedHealthResponse, HealthResponse
+from app.models.health import (
+    DependencyStatus,
+    DetailedHealthResponse,
+    HealthResponse,
+    MetricsResponse,
+)
 from app.models.scan import ScanAcceptedResponse, ScanRecord, ScanRequest
 from app.services.errors import ScanNotFoundError, TargetPolicyError
 from app.services.health import is_nmap_available
@@ -39,6 +44,30 @@ def _health_payload(request: Request) -> HealthResponse:
     )
 
 
+def _get_memory_info() -> dict:
+    try:
+        import psutil
+
+        proc = psutil.Process()
+        mem = proc.memory_info()
+        return {
+            "rss_mb": round(mem.rss / 1024 / 1024, 2),
+            "vms_mb": round(mem.vms / 1024 / 1024, 2),
+            "percent": round(proc.memory_percent(), 3),
+        }
+    except Exception:
+        return {"rss_mb": None, "vms_mb": None, "percent": None}
+
+
+def _get_cpu_percent() -> float | None:
+    try:
+        import psutil
+
+        return round(psutil.Process().cpu_percent(interval=0.05), 2)
+    except Exception:
+        return None
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health(request: Request) -> HealthResponse:
     return _health_payload(request)
@@ -71,6 +100,29 @@ async def detailed_health(request: Request) -> DetailedHealthResponse:
             "processor": platform.processor(),
             "allowed_origins_count": len(settings.allowed_origins),
         },
+        memory=_get_memory_info(),
+        cpu_percent=_get_cpu_percent(),
+    )
+
+
+@router.get("/metrics", response_model=MetricsResponse)
+async def metrics(request: Request, accept: str = "") -> Response:
+    """Expose operational metrics. Returns Prometheus text when Accept: text/plain."""
+    collector = getattr(request.app.state, "metrics", None)
+    accept_header = request.headers.get("accept", accept)
+
+    if collector is None:
+        raise HTTPException(status_code=503, detail="Metrics collector not initialized.")
+
+    if "text/plain" in accept_header:
+        return Response(
+            content=collector.prometheus_text(),
+            media_type="text/plain; version=0.0.4",
+        )
+
+    return Response(
+        content=MetricsResponse(**collector.snapshot()).model_dump_json(),
+        media_type="application/json",
     )
 
 

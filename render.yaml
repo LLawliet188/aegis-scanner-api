@@ -1,0 +1,63 @@
+# Render.com deployment configuration
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Deploy: push this file to your repo, then create a new "Blueprint" in Render.
+# Set secret env vars (ALLOWED_ORIGINS, etc.) in the Render dashboard.
+
+services:
+  # ── Backend (FastAPI + Nmap) ──────────────────────────────────────────────
+  - type: web
+    name: aegis-scanner-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: starter          # upgrade to standard for production traffic
+    healthCheckPath: /v1/health
+    envVars:
+      - key: ENV_MODE
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: AEGIS_HOST
+        value: 0.0.0.0
+      - key: AEGIS_PORT
+        fromService:
+          name: aegis-scanner-backend
+          type: web
+          property: port
+      - key: AEGIS_SCAN_ENGINE
+        value: nmap
+      - key: AEGIS_ALLOWED_TARGET_MODE
+        value: private          # change to 'any' only on authorized networks
+      - key: AEGIS_MAX_SCAN_HOSTS
+        value: "16"
+      - key: AEGIS_NMAP_PATH
+        value: /usr/bin/nmap
+      - key: AEGIS_ENABLE_OS_DETECTION
+        value: "false"
+      - key: AEGIS_ENABLE_VULN_SCRIPTS
+        value: "false"
+      # REQUIRED: set in Render dashboard → Environment
+      # ALLOWED_ORIGINS=https://your-frontend.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  # ── Frontend (static site on Vercel or Render static) ────────────────────
+  # Option A: deploy frontend separately to Vercel (recommended).
+  #   1. Import the repo on vercel.com, set Root Directory to "frontend".
+  #   2. Set VITE_API_URL=https://aegis-scanner-backend.onrender.com/v1
+  #
+  # Option B: serve as a Render static site (uncomment below).
+  # - type: web
+  #   name: aegis-scanner-frontend
+  #   runtime: static
+  #   buildCommand: cd frontend && npm ci && npm run build
+  #   staticPublishPath: frontend/dist
+  #   routes:
+  #     - type: rewrite
+  #       source: /*
+  #       destination: /index.html
+  #   envVars:
+  #     - key: VITE_API_URL
+  #       value: https://aegis-scanner-backend.onrender.com/v1
