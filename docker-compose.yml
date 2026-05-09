@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: .
+    container_name: aegis-scanner-api
+    ports:
+      - "8000:8000"
+    environment:
+      AEGIS_ENVIRONMENT: docker
+      AEGIS_SCAN_ENGINE: nmap
+      AEGIS_ALLOWED_TARGET_MODE: private
+      AEGIS_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+      AEGIS_LOCAL_HOSTNAMES: localhost,host.docker.internal
+      AEGIS_ENABLE_OS_DETECTION: "false"
+      AEGIS_ENABLE_VULN_SCRIPTS: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - aegis
+
+networks:
+  aegis:
+    driver: bridge
+
