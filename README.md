@@ -12,7 +12,7 @@ Production-style FastAPI backend for a cybersecurity SaaS portfolio dashboard. T
 - Default private-network scanning policy to reduce abuse risk
 - Structured Pydantic response models for hosts, ports, vulnerabilities, and scan summaries
 - CVE enrichment service boundary ready for NVD, OSV, or commercial feeds later
-- Docker image with Nmap installed, non-root app runtime, healthcheck, and bridge networking
+- Docker Compose stack with backend, nginx-served frontend, dedicated reverse proxy, Nmap, healthchecks, and bridge networking
 - Test suite covering API lifecycle, WebSocket events, target policy, command safety, and XML parsing
 
 ## Architecture
@@ -119,10 +119,10 @@ Copy `.env.example` to `.env` for local development.
 | `AEGIS_ENABLE_OS_DETECTION` | `false` | Enables `-O`; often needs elevated/container capabilities. |
 | `AEGIS_ENABLE_VULN_SCRIPTS` | `false` | Enables configured Nmap vuln scripts. Keep opt-in. |
 | `AEGIS_NMAP_VULN_SCRIPT_SELECTOR` | `vuln` | Script selector used when vuln scripts are enabled. |
-| `ALLOWED_ORIGINS` | localhost frontend URLs | Comma-separated browser origins allowed to call the API. Required for production. `AEGIS_CORS_ORIGINS` is still accepted for backward compatibility. |
+| `ALLOWED_ORIGINS` | localhost frontend/proxy URLs | Comma-separated browser origins allowed to call the API. Required for production. `AEGIS_CORS_ORIGINS` is still accepted for backward compatibility. |
 | `AEGIS_LOCAL_HOSTNAMES` | `localhost,host.docker.internal` | Hostnames allowed under private target policy. |
-| `VITE_API_URL` | `http://127.0.0.1:8000/v1` | Frontend REST API base URL. Use `/v1` when the nginx frontend proxies to the backend in Docker. |
-| `VITE_WS_URL` | `ws://127.0.0.1:8000/v1` | Frontend WebSocket API base URL. Use `/v1` when the nginx frontend proxies to the backend in Docker. |
+| `VITE_API_URL` | `/v1` in Docker, local backend URL for Vite dev | Frontend API base URL. WebSocket URLs are derived from this same value. |
+| `APP_PORT` | `8000` | Public nginx reverse-proxy port used by Docker Compose. |
 
 ## Local Development
 
@@ -179,26 +179,34 @@ pytest -q
 Build and run:
 
 ```bash
-docker compose up --build
+docker compose up
 ```
+
+Use `docker compose up --build` after changing Dockerfiles or source that should force a fresh image rebuild.
 
 The full stack will be available at:
 
 ```text
-Frontend: http://localhost:5173
+Frontend: http://localhost:8000
 Backend:  http://localhost:8000/v1
 WebSocket: ws://localhost:8000/v1/ws/scan/{scan_id}
 ```
 
-The compose file uses normal bridge networking. The frontend container serves the Vite build with nginx and proxies `/v1` and `/v1/ws` to the API container, so the browser can use same-origin API paths in containerized deployment.
+The compose file uses normal bridge networking and starts three services:
 
-The backend image includes Nmap. For local Docker runs, Nmap is resolved from PATH inside the API container.
+- `backend`: FastAPI + Nmap, with startup validation that runs `nmap --version`.
+- `frontend`: static Vite build served by nginx.
+- `nginx`: public ingress that routes `/` to the frontend and `/v1/*` plus `/v1/ws/*` to the backend.
+
+The browser uses same-origin `/v1` API paths in containerized deployment, so no host-specific frontend rebuild is needed for the default local Docker stack.
+
+The backend image includes Nmap. The container sets `AEGIS_NMAP_PATH=/usr/bin/nmap` and refuses to start silently if `nmap --version` fails.
 
 Use environment variables or a local `.env` file to override ports, CORS origins, target policy, and frontend API URLs.
 
 ## CI
 
-GitHub Actions runs on every push and pull request. The workflow installs backend dependencies, validates Python imports, runs the backend test suite, installs frontend dependencies, lints the frontend, and builds the Vite app.
+GitHub Actions runs on every push and pull request. The workflow installs backend dependencies, validates Python imports, runs the backend test suite, installs frontend dependencies, lints the frontend, builds the Vite app, builds the Docker Compose stack, starts it, checks `http://localhost:8000/v1/health` through nginx, and opens a basic WebSocket connection through the same proxy.
 
 Do not use `network_mode: host` for this project by default. It behaves differently across Linux, macOS, and Windows and can make the portfolio harder to reproduce.
 
@@ -254,14 +262,13 @@ The React frontend uses these environment variables:
 
 ```env
 VITE_API_URL=http://127.0.0.1:8000/v1
-VITE_WS_URL=ws://127.0.0.1:8000/v1
 ```
 
 Expected frontend flow:
 
 1. `POST ${VITE_API_URL}/scan` with target and options.
 2. Read `scan_id` from the response.
-3. Open `${VITE_WS_URL}/ws/scan/${scan_id}`.
+3. Open the WebSocket URL derived from `VITE_API_URL`.
 4. Render `log` events as terminal output.
 5. Render `progress` events in progress UI.
 6. Render `finding` events immediately.

@@ -3,7 +3,6 @@
 !.env.example
 frontend/.env
 frontend/.env.*
-!frontend/.env
 !frontend/.env.example
 .runtime/
 .git-online/

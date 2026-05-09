@@ -1,11 +1,12 @@
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
-const absoluteWebSocketUrl = (value: string) => {
-  if (/^wss?:\/\//i.test(value)) {
-    return value;
+
+const toAbsoluteWebSocketUrl = (baseUrl: string) => {
+  if (/^https?:\/\//i.test(baseUrl)) {
+    return baseUrl.replace(/^http/i, "ws");
   }
 
+  const path = baseUrl.startsWith("/") ? baseUrl : `/${baseUrl}`;
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const path = value.startsWith("/") ? value : `/${value}`;
   return `${protocol}://${window.location.host}${path}`;
 };
 
@@ -17,9 +18,7 @@ const requireApiUrl = () => {
 };
 
 export const API_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL ?? "");
-export const WS_URL = normalizeBaseUrl(
-  absoluteWebSocketUrl(import.meta.env.VITE_WS_URL ?? API_URL.replace(/^http/, "ws")),
-);
+export const WS_URL = toAbsoluteWebSocketUrl(requireApiUrl());
 
 export type ScanStatus = "queued" | "running" | "completed" | "failed";
 

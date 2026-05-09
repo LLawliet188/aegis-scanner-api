@@ -8,8 +8,10 @@ Copy `.env.example` to `.env` when running locally:
 
 ```env
 VITE_API_URL=http://127.0.0.1:8000/v1
-VITE_WS_URL=ws://127.0.0.1:8000/v1
 ```
+
+WebSocket URLs are derived from `VITE_API_URL`, including same-origin `/v1`
+deployments behind nginx.
 
 ## Run Locally on Windows
 
