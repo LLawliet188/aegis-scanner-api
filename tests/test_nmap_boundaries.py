@@ -5,6 +5,7 @@ from app.core.config import Settings
 from app.core.targeting import enforce_target_policy
 from app.models.scan import ScanOptions, ScanRequest
 from app.services.errors import TargetPolicyError
+from app.services.health import resolve_nmap_path
 from app.services.nmap_runner import NmapScanner
 from app.utils.nmap_parser import parse_nmap_xml
 
@@ -35,6 +36,13 @@ def test_nmap_command_uses_safe_defaults_when_privileged_options_disabled():
     assert "-O" not in command
     assert "--script" not in command
     assert command[-1] == "127.0.0.1"
+
+
+def test_nmap_path_resolver_accepts_explicit_executable(tmp_path):
+    executable = tmp_path / "nmap.exe"
+    executable.write_text("", encoding="utf-8")
+
+    assert resolve_nmap_path(str(executable)) == str(executable)
 
 
 def test_nmap_xml_parser_creates_structured_findings():
@@ -73,4 +81,3 @@ def test_nmap_xml_parser_creates_structured_findings():
         "AEGIS-TELNET-EXPOSED",
         "NMAP-SCRIPT-HTTP-TITLE",
     }
-

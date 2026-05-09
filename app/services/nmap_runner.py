@@ -1,5 +1,7 @@
 import asyncio
+import os
 import re
+import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,7 +10,7 @@ from typing import Awaitable, Callable
 from app.core.config import Settings
 from app.models.scan import ScanRequest, ScanResult
 from app.services.errors import ScannerExecutionError, ScannerUnavailableError
-from app.services.health import is_nmap_available
+from app.services.health import resolve_nmap_path
 from app.utils.nmap_parser import parse_nmap_xml
 
 EmitCallback = Callable[[str, str, int | None, dict | None], Awaitable[None]]
@@ -20,16 +22,17 @@ class NmapScanner:
         self.settings = settings
 
     async def run(self, scan_id: str, request: ScanRequest, emit: EmitCallback) -> ScanResult:
-        if not is_nmap_available(self.settings.nmap_path):
+        nmap_executable = resolve_nmap_path(self.settings.nmap_path)
+        if not nmap_executable:
             raise ScannerUnavailableError(
                 f"Nmap executable was not found at '{self.settings.nmap_path}'. "
-                "Install Nmap locally or use the Docker image."
+                "Install Nmap locally, set AEGIS_NMAP_PATH, or use AEGIS_SCAN_ENGINE=mock."
             )
 
         started_at = datetime.now(UTC)
         with tempfile.TemporaryDirectory(prefix="aegis-nmap-") as tmpdir:
             output_path = Path(tmpdir) / f"{scan_id}.xml"
-            command = self._build_command(request, output_path)
+            command = self._build_command(request, output_path, nmap_executable)
             await emit("log", f"Starting Nmap scan for {request.target}", 5, {"profile": self._profile_name(request)})
             if request.options.os_detection and not self.settings.enable_os_detection:
                 await emit("log", "OS detection requested but disabled by server policy.", None, None)
@@ -37,20 +40,32 @@ class NmapScanner:
                 await emit("log", "Vulnerability scripts requested but disabled by server policy.", None, None)
             await emit("log", self._summarize_command(command), None, None)
 
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            process_options = {}
+            if os.name == "nt":
+                process_options["creationflags"] = subprocess.CREATE_NO_WINDOW
 
-            await asyncio.gather(
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    **process_options,
+                )
+            except OSError as exc:
+                raise ScannerExecutionError(f"Failed to start Nmap: {exc}") from exc
+
+            stdout_lines, stderr_lines = await asyncio.gather(
                 self._stream_output(process.stdout, emit, "stdout"),
                 self._stream_output(process.stderr, emit, "stderr"),
             )
             return_code = await process.wait()
 
             if return_code != 0:
-                raise ScannerExecutionError(f"Nmap exited with code {return_code}.")
+                detail = self._tail_error(stderr_lines or stdout_lines)
+                message = f"Nmap exited with code {return_code}."
+                if detail:
+                    message = f"{message} Last output: {detail}"
+                raise ScannerExecutionError(message)
 
             if not output_path.exists():
                 raise ScannerExecutionError("Nmap completed but did not produce XML output.")
@@ -67,10 +82,10 @@ class NmapScanner:
             )
             return result
 
-    def _build_command(self, request: ScanRequest, output_path: Path) -> list[str]:
+    def _build_command(self, request: ScanRequest, output_path: Path, nmap_executable: str | None = None) -> list[str]:
         options = request.options
         command = [
-            self.settings.nmap_path,
+            nmap_executable or self.settings.nmap_path,
             "-oX",
             str(output_path),
             "--stats-every",
@@ -116,9 +131,10 @@ class NmapScanner:
             enabled.append("vuln-scripts")
         return f"{request.options.intensity}:{'+'.join(enabled)}"
 
-    async def _stream_output(self, stream: asyncio.StreamReader | None, emit: EmitCallback, source: str) -> None:
+    async def _stream_output(self, stream: asyncio.StreamReader | None, emit: EmitCallback, source: str) -> list[str]:
+        lines: list[str] = []
         if stream is None:
-            return
+            return lines
         while True:
             line = await stream.readline()
             if not line:
@@ -126,11 +142,13 @@ class NmapScanner:
             text = line.decode("utf-8", errors="replace").strip()
             if not text:
                 continue
+            lines.append(text)
             progress = self._parse_progress(text)
             if progress is not None:
                 await emit("progress", text, min(progress, 94), {"source": source})
             else:
                 await emit("log", text, None, {"source": source})
+        return lines
 
     @staticmethod
     def _parse_progress(line: str) -> int | None:
@@ -141,5 +159,13 @@ class NmapScanner:
 
     @staticmethod
     def _summarize_command(command: list[str]) -> str:
-        safe_parts = [part for part in command if not str(part).startswith("/tmp/")]
+        safe_parts = command.copy()
+        if "-oX" in safe_parts:
+            output_index = safe_parts.index("-oX") + 1
+            if output_index < len(safe_parts):
+                safe_parts[output_index] = "<xml-output>"
         return "Command profile: " + " ".join(safe_parts)
+
+    @staticmethod
+    def _tail_error(lines: list[str]) -> str:
+        return " | ".join(lines[-3:])

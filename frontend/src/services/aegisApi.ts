@@ -1,5 +1,7 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL ?? API_BASE_URL.replace(/^http/, "ws");
+const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
+
+export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000");
+export const WS_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_WS_BASE_URL ?? API_BASE_URL.replace(/^http/, "ws"));
 
 export type ScanStatus = "queued" | "running" | "completed" | "failed";
 
@@ -90,4 +92,3 @@ export const startScan = async (target: string): Promise<ScanAcceptedResponse> =
 export const createScanSocket = (scanId: string) => {
   return new WebSocket(`${WS_BASE_URL}/ws/scan/${scanId}`);
 };
-

@@ -13,6 +13,17 @@ def get_scan_manager(request: Request) -> ScanManager:
     return request.app.state.scan_manager
 
 
+@router.get("/")
+async def root(request: Request) -> dict[str, str]:
+    settings = request.app.state.settings
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health(request: Request) -> HealthResponse:
     settings = request.app.state.settings
@@ -49,4 +60,3 @@ async def get_scan(scan_id: str, request: Request) -> ScanRecord:
         return await manager.get_scan(scan_id)
     except ScanNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-

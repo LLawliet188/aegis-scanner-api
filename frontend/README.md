@@ -1,43 +1,34 @@
-# Network Vulnerability Scanner Web
+# Aegis Scanner Frontend
 
-A cinematic cybersecurity interface for an AI-powered network vulnerability scanner.
+React + Vite dashboard for the FastAPI scanner backend in this repository.
 
-This is the standalone web version of the scanner showcase from my cybersecurity portfolio. It is designed to feel like a premium security SaaS product: dark, glassy, animated, technical, and readable.
+## Environment
 
-Portfolio repo: [LLawliet188/cybersec-portfolio](https://github.com/LLawliet188/cybersec-portfolio)
+Copy `.env.example` to `.env` when running locally:
 
-## What It Shows
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_BASE_URL=ws://localhost:8000
+```
 
-- Animated vulnerability metrics
-- Live terminal-style scan logs
-- WebGL LightRays background atmosphere
-- Network topology and threat hotspot visualization
-- Premium glassmorphism UI
-- Responsive React + TypeScript implementation
+## Run Locally on Windows
 
-## Tech Stack
+From the repository root:
 
-- React
-- TypeScript
-- TailwindCSS
-- Framer Motion
-- OGL WebGL
-- Lucide React
-- Vite
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_frontend.ps1
+```
 
-## Run Locally
+Or run npm through `npm.cmd` directly to avoid the PowerShell `npm.ps1`
+execution-policy block:
 
-```bash
-npm install
-npm run dev
+```powershell
+npm.cmd --prefix frontend install
+npm.cmd --prefix frontend run dev
 ```
 
 ## Build
 
-```bash
-npm run build
+```powershell
+npm.cmd --prefix frontend run build
 ```
-
-## Project Note
-
-This is currently a polished frontend prototype. The UI simulates scanner output so the product experience is clear before a real backend is attached. A future version can connect to a Python/FastAPI scanner service using Nmap and structured CVE reporting.

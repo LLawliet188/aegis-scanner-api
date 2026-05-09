@@ -4,7 +4,7 @@ Production-style FastAPI backend for a cybersecurity SaaS portfolio dashboard. T
 
 ## Features
 
-- FastAPI REST API with `/health`, `/scan`, and `/scan/{scan_id}`
+- FastAPI REST API with `/`, `/health`, `/scan`, and `/scan/{scan_id}`
 - WebSocket stream at `/ws/scan/{scan_id}` for live logs, progress, findings, and completion events
 - Real Nmap integration through a safe subprocess boundary plus `python-nmap` XML parsing support
 - Target validation for hostnames, IP addresses, and small CIDR ranges
@@ -38,6 +38,10 @@ tests/                    API, WebSocket, safety, parser tests
 The current store is intentionally in-memory for portfolio/local development. For production, replace `ScanStore` with Redis, Postgres, or another durable queue-backed store without changing the API contract.
 
 ## API
+
+### `GET /`
+
+Returns a small service index with links to `/health` and `/docs`.
 
 ### `GET /health`
 
@@ -111,27 +115,39 @@ Copy `.env.example` to `.env` for local development.
 
 ## Local Development
 
-Install Python 3.12 and Nmap first.
+Install Python 3.12+ and Nmap first. On Windows, the helper scripts use
+`python -m uvicorn` and `npm.cmd` so the app works even when PowerShell blocks
+activation scripts or `npm.ps1`.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-On Windows PowerShell:
+Backend:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+powershell -ExecutionPolicy Bypass -File .\run_backend.ps1
 ```
 
-If Nmap is not installed locally, use `AEGIS_SCAN_ENGINE=mock` for frontend integration work. Real scan requests require the Nmap binary or the Docker image.
+Frontend:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_frontend.ps1
+```
+
+Manual backend commands:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Manual frontend commands:
+
+```powershell
+npm.cmd --prefix frontend install
+npm.cmd --prefix frontend run dev
+```
+
+If Nmap is not installed locally, use `AEGIS_SCAN_ENGINE=mock` for frontend integration work. Real scan requests require the Nmap binary, `AEGIS_NMAP_PATH` pointing to `nmap.exe`, or the Docker image.
 
 Run tests:
 
@@ -208,9 +224,10 @@ Provider examples change over time, so check the current acceptable use policy b
 
 ## Frontend Connectivity
 
-This exported workspace can include the React dashboard in `frontend/`. From the
-project root, run `npm run frontend:install` once, then `npm run dev` to start the
-frontend. Run the backend separately with `uvicorn app.main:app --reload`.
+The React dashboard lives in `frontend/`. From the project root, run
+`powershell -ExecutionPolicy Bypass -File .\run_frontend.ps1`, or use
+`npm.cmd --prefix frontend run dev` directly. Run the backend separately with
+`.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`.
 
 The React frontend should use two environment variables:
 

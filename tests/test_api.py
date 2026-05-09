@@ -9,6 +9,14 @@ def test_health(client):
     assert payload["scan_engine"] == "mock"
 
 
+def test_root(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["health"] == "/health"
+
+
 def test_scan_lifecycle(client):
     response = client.post("/scan", json={"target": "127.0.0.1", "options": {"top_ports": 10}})
     assert response.status_code == 202
@@ -54,4 +62,3 @@ def test_websocket_streams_scan_events(client):
     assert "log" in event_types
     assert "finding" in event_types
     assert "completed" in event_types
-
