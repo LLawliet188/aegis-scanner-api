@@ -31,7 +31,7 @@ async def health(request: Request) -> HealthResponse:
         status="ok",
         environment=settings.environment,
         scan_engine=settings.scan_engine,
-        nmap_available=is_nmap_available(settings.nmap_path),
+        nmap_available=is_nmap_available(),
         allowed_target_mode=settings.allowed_target_mode,
     )
 

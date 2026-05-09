@@ -1,12 +1,15 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from app.core.config import Settings
 from app.core.targeting import enforce_target_policy
 from app.models.scan import ScanOptions, ScanRequest
 from app.services.errors import TargetPolicyError
-from app.services.health import resolve_nmap_path
 from app.services.nmap_runner import NmapScanner
+from app.utils import nmap_resolver
+from app.utils.nmap_resolver import NMAP_NOT_INSTALLED_MESSAGE, get_nmap_path
 from app.utils.nmap_parser import parse_nmap_xml
 
 
@@ -30,7 +33,7 @@ def test_nmap_command_uses_safe_defaults_when_privileged_options_disabled():
         options=ScanOptions(top_ports=10, os_detection=True, vuln_scripts=True),
     )
 
-    command = scanner._build_command(request, Path("scan.xml"))
+    command = scanner._build_command(request, Path("scan.xml"), "C:\\Program Files\\Nmap\\nmap.exe")
 
     assert "-sV" in command
     assert "-O" not in command
@@ -38,11 +41,28 @@ def test_nmap_command_uses_safe_defaults_when_privileged_options_disabled():
     assert command[-1] == "127.0.0.1"
 
 
-def test_nmap_path_resolver_accepts_explicit_executable(tmp_path):
-    executable = tmp_path / "nmap.exe"
-    executable.write_text("", encoding="utf-8")
+def test_nmap_path_resolver_accepts_explicit_executable(monkeypatch):
+    executable = Path(__file__)
+    monkeypatch.setenv("AEGIS_NMAP_PATH", str(executable))
 
-    assert resolve_nmap_path(str(executable)) == str(executable)
+    assert get_nmap_path() == str(executable)
+
+
+def test_nmap_path_resolver_treats_legacy_nmap_value_as_auto_detect(monkeypatch):
+    monkeypatch.setenv("AEGIS_NMAP_PATH", "nmap")
+    monkeypatch.setattr(nmap_resolver, "WINDOWS_COMMON_NMAP_PATHS", ())
+    monkeypatch.setattr(nmap_resolver.shutil, "which", lambda _: "C:\\Program Files\\Nmap\\nmap.exe")
+
+    assert get_nmap_path() == "C:\\Program Files\\Nmap\\nmap.exe"
+
+
+def test_nmap_path_resolver_fails_clearly(monkeypatch):
+    monkeypatch.delenv("AEGIS_NMAP_PATH", raising=False)
+    monkeypatch.setattr(nmap_resolver, "WINDOWS_COMMON_NMAP_PATHS", ())
+    monkeypatch.setattr(nmap_resolver.shutil, "which", lambda _: None)
+
+    with pytest.raises(RuntimeError, match=NMAP_NOT_INSTALLED_MESSAGE):
+        get_nmap_path()
 
 
 def test_nmap_xml_parser_creates_structured_findings():

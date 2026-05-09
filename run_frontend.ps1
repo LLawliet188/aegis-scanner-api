@@ -14,8 +14,6 @@ if (-not (Test-Path $FrontendEnv) -and (Test-Path $FrontendEnvExample)) {
     Copy-Item $FrontendEnvExample $FrontendEnv
 }
 
-if (-not (Test-Path (Join-Path $Root "frontend\node_modules"))) {
-    & $NpmCommand.Source --prefix frontend install
-}
+& $NpmCommand.Source --prefix frontend install
 
 & $NpmCommand.Source --prefix frontend run dev

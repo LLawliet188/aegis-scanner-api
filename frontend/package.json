@@ -8,7 +8,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/LLawliet188/network-vulnerability-scanner-web.git"
+    "url": "https://github.com/LLawliet188/aegis-scanner-api.git"
   },
   "scripts": {
     "dev": "vite",

@@ -8,6 +8,15 @@ if (-not (Test-Path $Python)) {
     py -3 -m venv .venv
 }
 
+$Activate = Join-Path $Root ".venv\Scripts\Activate.ps1"
+if (Test-Path $Activate) {
+    try {
+        . $Activate
+    } catch {
+        Write-Warning "Could not activate the virtual environment in this shell. Continuing with the venv Python directly."
+    }
+}
+
 & $Python -m pip install --upgrade pip
 & $Python -m pip install -r requirements.txt
 

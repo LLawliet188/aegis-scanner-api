@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import re
 import subprocess
@@ -10,11 +11,12 @@ from typing import Awaitable, Callable
 from app.core.config import Settings
 from app.models.scan import ScanRequest, ScanResult
 from app.services.errors import ScannerExecutionError, ScannerUnavailableError
-from app.services.health import resolve_nmap_path
+from app.utils.nmap_resolver import NMAP_NOT_INSTALLED_MESSAGE, get_nmap_path
 from app.utils.nmap_parser import parse_nmap_xml
 
 EmitCallback = Callable[[str, str, int | None, dict | None], Awaitable[None]]
 PROGRESS_RE = re.compile(r"About\s+([0-9.]+)%\s+done", re.IGNORECASE)
+logger = logging.getLogger(__name__)
 
 
 class NmapScanner:
@@ -22,23 +24,27 @@ class NmapScanner:
         self.settings = settings
 
     async def run(self, scan_id: str, request: ScanRequest, emit: EmitCallback) -> ScanResult:
-        nmap_executable = resolve_nmap_path(self.settings.nmap_path)
-        if not nmap_executable:
-            raise ScannerUnavailableError(
-                f"Nmap executable was not found at '{self.settings.nmap_path}'. "
-                "Install Nmap locally, set AEGIS_NMAP_PATH, or use AEGIS_SCAN_ENGINE=mock."
-            )
+        try:
+            nmap_executable = get_nmap_path()
+        except RuntimeError as exc:
+            logger.error("nmap_unavailable", extra={"scan_id": scan_id, "target": request.target})
+            raise ScannerUnavailableError(NMAP_NOT_INSTALLED_MESSAGE) from exc
 
         started_at = datetime.now(UTC)
         with tempfile.TemporaryDirectory(prefix="aegis-nmap-") as tmpdir:
             output_path = Path(tmpdir) / f"{scan_id}.xml"
             command = self._build_command(request, output_path, nmap_executable)
             await emit("log", f"Starting Nmap scan for {request.target}", 5, {"profile": self._profile_name(request)})
+            logger.info(
+                "nmap_scan_started",
+                extra={"scan_id": scan_id, "target": request.target, "nmap_path": nmap_executable},
+            )
             if request.options.os_detection and not self.settings.enable_os_detection:
                 await emit("log", "OS detection requested but disabled by server policy.", None, None)
             if request.options.vuln_scripts and not self.settings.enable_vuln_scripts:
                 await emit("log", "Vulnerability scripts requested but disabled by server policy.", None, None)
             await emit("log", self._summarize_command(command), None, None)
+            logger.info("nmap_command_built", extra={"scan_id": scan_id, "command": self._summarize_command(command)})
 
             process_options = {}
             if os.name == "nt":
@@ -52,6 +58,7 @@ class NmapScanner:
                     **process_options,
                 )
             except OSError as exc:
+                logger.exception("nmap_start_failed", extra={"scan_id": scan_id, "target": request.target})
                 raise ScannerExecutionError(f"Failed to start Nmap: {exc}") from exc
 
             stdout_lines, stderr_lines = await asyncio.gather(
@@ -65,6 +72,10 @@ class NmapScanner:
                 message = f"Nmap exited with code {return_code}."
                 if detail:
                     message = f"{message} Last output: {detail}"
+                logger.error(
+                    "nmap_scan_failed",
+                    extra={"scan_id": scan_id, "target": request.target, "return_code": return_code, "detail": detail},
+                )
                 raise ScannerExecutionError(message)
 
             if not output_path.exists():
@@ -80,12 +91,16 @@ class NmapScanner:
                 finished_at=datetime.now(UTC),
                 command_profile=self._profile_name(request),
             )
+            logger.info(
+                "nmap_scan_completed",
+                extra={"scan_id": scan_id, "target": request.target, "summary": result.summary},
+            )
             return result
 
-    def _build_command(self, request: ScanRequest, output_path: Path, nmap_executable: str | None = None) -> list[str]:
+    def _build_command(self, request: ScanRequest, output_path: Path, nmap_executable: str) -> list[str]:
         options = request.options
         command = [
-            nmap_executable or self.settings.nmap_path,
+            nmap_executable,
             "-oX",
             str(output_path),
             "--stats-every",
@@ -146,8 +161,10 @@ class NmapScanner:
             progress = self._parse_progress(text)
             if progress is not None:
                 await emit("progress", text, min(progress, 94), {"source": source})
+                logger.info("nmap_progress", extra={"source": source, "line": text, "progress": min(progress, 94)})
             else:
                 await emit("log", text, None, {"source": source})
+                logger.info("nmap_output", extra={"source": source, "line": text})
         return lines
 
     @staticmethod

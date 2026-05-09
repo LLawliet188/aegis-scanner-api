@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -10,6 +11,8 @@ from app.services.cve_service import CveEnrichmentService
 from app.services.errors import ScanNotFoundError, ScannerExecutionError, ScannerUnavailableError
 from app.services.event_bus import EventBus
 from app.services.scan_store import ScanStore
+
+logger = logging.getLogger(__name__)
 
 
 class ScanManager:
@@ -42,6 +45,10 @@ class ScanManager:
         )
         await self.store.create(record)
         await self._publish(record.scan_id, "queued", "Scan queued.", 0, {"target": request.target})
+        logger.info(
+            "scan_queued",
+            extra={"scan_id": record.scan_id, "target": request.target, "engine": self.settings.scan_engine},
+        )
         asyncio.create_task(self._run_scan(record.scan_id, request))
         return record
 
@@ -54,6 +61,7 @@ class ScanManager:
     async def _run_scan(self, scan_id: str, request: ScanRequest) -> None:
         await self.store.update(scan_id, status=ScanStatus.running)
         await self._publish(scan_id, "progress", "Scan started.", 1, None)
+        logger.info("scan_started", extra={"scan_id": scan_id, "target": request.target})
 
         async def emit(event_type: str, message: str, progress: int | None = None, data: dict | None = None) -> None:
             await self._publish(scan_id, event_type, message, progress, data)
@@ -79,12 +87,15 @@ class ScanManager:
                 100,
                 {"summary": result.summary, "result": result.model_dump(mode="json")},
             )
+            logger.info("scan_completed", extra={"scan_id": scan_id, "target": request.target, "summary": result.summary})
         except (ScannerUnavailableError, ScannerExecutionError) as exc:
             await self.store.update(scan_id, status=ScanStatus.failed, error=str(exc))
             await self._publish(scan_id, "error", str(exc), None, None)
+            logger.error("scan_failed", extra={"scan_id": scan_id, "target": request.target, "error": str(exc)})
         except Exception as exc:
             await self.store.update(scan_id, status=ScanStatus.failed, error="Unexpected scan failure.")
             await self._publish(scan_id, "error", f"Unexpected scan failure: {exc}", None, None)
+            logger.exception("scan_unexpected_failure", extra={"scan_id": scan_id, "target": request.target})
 
     async def _publish(
         self,
@@ -104,4 +115,3 @@ class ScanManager:
                 data=data,
             )
         )
-

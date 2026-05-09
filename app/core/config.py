@@ -1,8 +1,15 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_LOCAL_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 
 class Settings(BaseSettings):
@@ -11,19 +18,20 @@ class Settings(BaseSettings):
         env_prefix="AEGIS_",
         case_sensitive=False,
         extra="ignore",
+        populate_by_name=True,
     )
 
     app_name: str = "Aegis Scanner API"
     environment: str = "development"
     host: str = "0.0.0.0"
     port: int = 8000
+    log_level: str = "INFO"
 
     scan_engine: Literal["nmap", "mock"] = "nmap"
     allowed_target_mode: Literal["private", "any"] = "private"
     max_scan_hosts: int = Field(default=16, ge=1, le=256)
     local_hostnames: list[str] | str = Field(default_factory=lambda: ["localhost", "host.docker.internal"])
 
-    nmap_path: str = "nmap"
     nmap_host_timeout_seconds: int = Field(default=120, ge=10, le=900)
     nmap_script_timeout_seconds: int = Field(default=20, ge=5, le=120)
     nmap_stats_interval_seconds: int = Field(default=5, ge=1, le=60)
@@ -32,21 +40,33 @@ class Settings(BaseSettings):
     enable_vuln_scripts: bool = False
     nmap_vuln_script_selector: str = "vuln"
 
-    cors_origins: list[str] | str = Field(
-        default_factory=lambda: [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ]
+    allowed_origins: list[str] | str = Field(
+        default_factory=lambda: DEFAULT_LOCAL_ORIGINS.copy(),
+        validation_alias=AliasChoices("ALLOWED_ORIGINS", "AEGIS_CORS_ORIGINS"),
     )
 
-    @field_validator("cors_origins", "local_hostnames", mode="before")
+    @field_validator("allowed_origins", "local_hostnames", mode="before")
     @classmethod
     def parse_csv_list(cls, value):
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
+
+    @field_validator("log_level")
+    @classmethod
+    def normalize_log_level(cls, value: str) -> str:
+        return value.upper()
+
+    @model_validator(mode="after")
+    def validate_production_settings(self):
+        if any(origin == "*" for origin in self.allowed_origins):
+            if self.environment.lower() == "production":
+                raise ValueError("Wildcard CORS origins are not allowed in production.")
+
+        if self.environment.lower() == "production" and self.allowed_origins == DEFAULT_LOCAL_ORIGINS:
+            raise ValueError("ALLOWED_ORIGINS must be set for production deployments.")
+
+        return self
 
 
 @lru_cache

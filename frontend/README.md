@@ -7,8 +7,8 @@ React + Vite dashboard for the FastAPI scanner backend in this repository.
 Copy `.env.example` to `.env` when running locally:
 
 ```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_WS_BASE_URL=ws://localhost:8000
+VITE_API_URL=http://127.0.0.1:8000
+VITE_WS_URL=ws://127.0.0.1:8000
 ```
 
 ## Run Locally on Windows

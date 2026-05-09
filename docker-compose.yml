@@ -9,7 +9,7 @@ services:
       AEGIS_ENVIRONMENT: docker
       AEGIS_SCAN_ENGINE: nmap
       AEGIS_ALLOWED_TARGET_MODE: private
-      AEGIS_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
       AEGIS_LOCAL_HOSTNAMES: localhost,host.docker.internal
       AEGIS_ENABLE_OS_DETECTION: "false"
       AEGIS_ENABLE_VULN_SCRIPTS: "false"
@@ -21,4 +21,3 @@ services:
 networks:
   aegis:
     driver: bridge
-

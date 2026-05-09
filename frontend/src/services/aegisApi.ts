@@ -1,7 +1,13 @@
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
+const requireEnv = (value: string | undefined, name: string) => {
+  if (!value) {
+    throw new Error(`${name} is required. Set it in frontend/.env or your deployment environment.`);
+  }
+  return value;
+};
 
-export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000");
-export const WS_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_WS_BASE_URL ?? API_BASE_URL.replace(/^http/, "ws"));
+export const API_URL = normalizeBaseUrl(requireEnv(import.meta.env.VITE_API_URL, "VITE_API_URL"));
+export const WS_URL = normalizeBaseUrl(import.meta.env.VITE_WS_URL ?? API_URL.replace(/^http/, "ws"));
 
 export type ScanStatus = "queued" | "running" | "completed" | "failed";
 
@@ -64,7 +70,7 @@ export type ScanEvent = {
 };
 
 export const startScan = async (target: string): Promise<ScanAcceptedResponse> => {
-  const response = await fetch(`${API_BASE_URL}/scan`, {
+  const response = await fetch(`${API_URL}/scan`, {
     body: JSON.stringify({
       target,
       options: {
@@ -90,5 +96,5 @@ export const startScan = async (target: string): Promise<ScanAcceptedResponse> =
 };
 
 export const createScanSocket = (scanId: string) => {
-  return new WebSocket(`${WS_BASE_URL}/ws/scan/${scanId}`);
+  return new WebSocket(`${WS_URL}/ws/scan/${scanId}`);
 };

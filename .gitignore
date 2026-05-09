@@ -3,6 +3,7 @@
 !.env.example
 frontend/.env
 frontend/.env.*
+!frontend/.env
 !frontend/.env.example
 .runtime/
 .git-online/
@@ -13,6 +14,7 @@ frontend/node_modules/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.pytest-tmp/
 .mypy_cache/
 .ruff_cache/
 .coverage

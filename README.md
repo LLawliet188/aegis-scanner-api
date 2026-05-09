@@ -31,6 +31,7 @@ app/
     nmap_runner.py        Safe Nmap process execution
     mock_scanner.py       Local/test scanner
     cve_service.py        Future enrichment boundary
+  utils/nmap_resolver.py  Portable Nmap executable detection
   utils/nmap_parser.py    Nmap XML to structured findings
 tests/                    API, WebSocket, safety, parser tests
 ```
@@ -106,11 +107,12 @@ Copy `.env.example` to `.env` for local development.
 | `AEGIS_SCAN_ENGINE` | `nmap` | Use `nmap` for real scans or `mock` for local UI/test demos without Nmap. |
 | `AEGIS_ALLOWED_TARGET_MODE` | `private` | `private` allows localhost/private IPs; `any` should only be used for authorized networks. |
 | `AEGIS_MAX_SCAN_HOSTS` | `16` | Maximum CIDR size accepted by the API. |
-| `AEGIS_NMAP_PATH` | `nmap` | Nmap executable path. |
+| `AEGIS_NMAP_PATH` | empty | Optional explicit path to `nmap.exe`. If unset on Windows, the API checks `C:\Program Files (x86)\Nmap\nmap.exe`, then `C:\Program Files\Nmap\nmap.exe`, then PATH. |
+| `AEGIS_LOG_LEVEL` | `INFO` | Python logging level. Logs are emitted as structured JSON. |
 | `AEGIS_ENABLE_OS_DETECTION` | `false` | Enables `-O`; often needs elevated/container capabilities. |
 | `AEGIS_ENABLE_VULN_SCRIPTS` | `false` | Enables configured Nmap vuln scripts. Keep opt-in. |
 | `AEGIS_NMAP_VULN_SCRIPT_SELECTOR` | `vuln` | Script selector used when vuln scripts are enabled. |
-| `AEGIS_CORS_ORIGINS` | localhost frontend URLs | Comma-separated browser origins allowed to call the API. |
+| `ALLOWED_ORIGINS` | localhost frontend URLs | Comma-separated browser origins allowed to call the API. Required for production. `AEGIS_CORS_ORIGINS` is still accepted for backward compatibility. |
 | `AEGIS_LOCAL_HOSTNAMES` | `localhost,host.docker.internal` | Hostnames allowed under private target policy. |
 
 ## Local Development
@@ -131,6 +133,14 @@ Frontend:
 powershell -ExecutionPolicy Bypass -File .\run_frontend.ps1
 ```
 
+One-click Windows startup:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_project.ps1
+```
+
+This opens backend and frontend in separate PowerShell windows.
+
 Manual backend commands:
 
 ```powershell
@@ -147,7 +157,7 @@ npm.cmd --prefix frontend install
 npm.cmd --prefix frontend run dev
 ```
 
-If Nmap is not installed locally, use `AEGIS_SCAN_ENGINE=mock` for frontend integration work. Real scan requests require the Nmap binary, `AEGIS_NMAP_PATH` pointing to `nmap.exe`, or the Docker image.
+If Nmap is not installed locally, use `AEGIS_SCAN_ENGINE=mock` for frontend integration work. Real scan requests automatically use `AEGIS_NMAP_PATH`, common Windows install paths, or PATH. If Nmap cannot be found, scan requests fail clearly with: `Nmap not installed. Install Nmap or set AEGIS_NMAP_PATH.`
 
 Run tests:
 
@@ -229,18 +239,18 @@ The React dashboard lives in `frontend/`. From the project root, run
 `npm.cmd --prefix frontend run dev` directly. Run the backend separately with
 `.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`.
 
-The React frontend should use two environment variables:
+The React frontend uses these environment variables:
 
 ```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_WS_BASE_URL=ws://localhost:8000
+VITE_API_URL=http://127.0.0.1:8000
+VITE_WS_URL=ws://127.0.0.1:8000
 ```
 
 Expected frontend flow:
 
-1. `POST ${VITE_API_BASE_URL}/scan` with target and options.
+1. `POST ${VITE_API_URL}/scan` with target and options.
 2. Read `scan_id` from the response.
-3. Open `${VITE_WS_BASE_URL}/ws/scan/${scan_id}`.
+3. Open `${VITE_WS_URL}/ws/scan/${scan_id}`.
 4. Render `log` events as terminal output.
 5. Render `progress` events in progress UI.
 6. Render `finding` events immediately.
