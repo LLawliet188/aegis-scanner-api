@@ -145,3 +145,54 @@ def test_missing_nmap_fails_scan_record_without_crashing(monkeypatch):
         assert record is not None
         assert record["status"] == "failed"
         assert record["error"] == NMAP_NOT_INSTALLED_MESSAGE
+
+
+# ── CORS tests ────────────────────────────────────────────────────────────────
+
+def test_cors_preflight_allowed_origin(client):
+    """OPTIONS preflight from a listed origin must return 200 with ACAO header."""
+    response = client.options(
+        "/v1/scan",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert "POST" in response.headers.get("access-control-allow-methods", "")
+
+
+def test_cors_preflight_disallowed_origin(client):
+    """OPTIONS preflight from an unlisted origin must NOT echo Access-Control-Allow-Origin."""
+    response = client.options(
+        "/v1/scan",
+        headers={
+            "Origin": "https://evil.example.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    # FastAPI returns 400 for disallowed origins; in all cases ACAO must not be echoed back.
+    assert response.headers.get("access-control-allow-origin") != "https://evil.example.com"
+
+
+def test_cors_simple_request_allowed_origin(client):
+    """A simple GET from a listed origin must include Access-Control-Allow-Origin."""
+    response = client.get("/v1/health", headers={"Origin": "http://localhost:5173"})
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
+def test_request_id_generated_when_absent(client):
+    """Every response must carry X-Request-ID even when the client sends none."""
+    response = client.get("/v1/health")
+    assert response.status_code == 200
+    assert response.headers.get("x-request-id"), "X-Request-ID missing from response"
+
+
+def test_request_id_echoed_when_supplied(client):
+    """Client-supplied X-Request-ID must be echoed back unchanged."""
+    response = client.get("/v1/health", headers={"X-Request-ID": "trace-abc-123"})
+    assert response.headers.get("x-request-id") == "trace-abc-123"

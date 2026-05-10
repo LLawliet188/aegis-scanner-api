@@ -138,6 +138,37 @@ jobs:
           RESPONSE=$(curl -fsS -D - http://localhost:8000/v1/health)
           echo "$RESPONSE" | grep -i "x-request-id"
 
+      - name: Validate CORS preflight from allowed origin
+        run: |
+          # Must return 200 with Access-Control-Allow-Origin echoed back
+          STATUS=$(curl -so /dev/null -w "%{http_code}" -X OPTIONS http://localhost:8000/v1/scan \
+            -H "Origin: http://localhost:8000" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type")
+          if [ "$STATUS" != "200" ]; then
+            echo "CORS preflight from allowed origin returned HTTP $STATUS (expected 200)"
+            exit 1
+          fi
+          ACAO=$(curl -sI -X OPTIONS http://localhost:8000/v1/scan \
+            -H "Origin: http://localhost:8000" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type" | grep -i "access-control-allow-origin")
+          echo "CORS header: $ACAO"
+          echo "$ACAO" | grep -qi "localhost:8000"
+
+      - name: Validate CORS preflight from disallowed origin is blocked
+        run: |
+          STATUS=$(curl -so /dev/null -w "%{http_code}" -X OPTIONS http://localhost:8000/v1/scan \
+            -H "Origin: https://evil.example.com" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type")
+          # Disallowed origins must not receive 200; FastAPI returns 400
+          if [ "$STATUS" = "200" ]; then
+            echo "CORS preflight from evil.example.com was NOT blocked (HTTP $STATUS)"
+            exit 1
+          fi
+          echo "Disallowed origin correctly rejected with HTTP $STATUS"
+
       - name: Stop Docker stack
         if: always()
         run: docker compose down -v
