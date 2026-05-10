@@ -27,6 +27,22 @@ def test_v1_detailed_health(client):
     assert "python_version" in payload["system"]
 
 
+def test_v1_metrics(client):
+    response = client.get("/v1/metrics")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "uptime_seconds" in payload
+    assert payload["requests_total"] >= 0
+    assert payload["scans_total"] == 0
+
+
+def test_v1_prometheus_metrics(client):
+    response = client.get("/v1/metrics", headers={"accept": "text/plain"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "aegis_uptime_seconds" in response.text
+
+
 def test_root(client):
     response = client.get("/")
     assert response.status_code == 200

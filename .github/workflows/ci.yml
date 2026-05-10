@@ -103,6 +103,9 @@ jobs:
       - name: Validate metrics endpoint through nginx
         run: curl -fsS http://localhost:8000/v1/metrics | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'uptime_seconds' in d, d"
 
+      - name: Validate Prometheus metrics endpoint through nginx
+        run: curl -fsS -H "Accept: text/plain" http://localhost:8000/v1/metrics | grep "aegis_uptime_seconds"
+
       - name: Validate detailed health endpoint through nginx
         run: curl -fsS http://localhost:8000/v1/health/detailed | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'memory' in d, d"
 
