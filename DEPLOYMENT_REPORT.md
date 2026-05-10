@@ -67,7 +67,7 @@ frontend  (aegis-scanner-frontend)
 ### Deployment Config
 
 - Added `render.yaml` — Render.com Blueprint for one-click backend Docker deployment.
-- Frontend: deploy to Vercel by importing the repo, setting Root Directory = `frontend`, and setting `VITE_API_URL=https://<backend>.onrender.com/v1`.
+- Frontend: deploy to Vercel by importing the repo, setting Root Directory = `frontend`, and setting `VITE_API_URL=https://aegis-scanner-api.onrender.com/v1`.
 
 ## Load Test Results
 
@@ -140,32 +140,32 @@ Required env vars (all have defaults for local):
 
 1. Push `render.yaml` to GitHub.
 2. Create a new **Blueprint** in the Render dashboard and link the repo.
-3. Set `ALLOWED_ORIGINS` to your Vercel frontend URL in the Render environment secrets.
-4. The backend URL will be `https://aegis-scanner-backend.onrender.com`.
+3. Set `ALLOWED_ORIGINS=https://aegis-scanner-api.vercel.app` in the Render environment.
+4. The backend URL is `https://aegis-scanner-api.onrender.com`.
 
 ### Vercel (frontend)
 
 1. Import repo on `vercel.com`, set **Root Directory** to `frontend`.
-2. Add env var: `VITE_API_URL=https://aegis-scanner-backend.onrender.com/v1`
+2. Add env var: `VITE_API_URL=https://aegis-scanner-api.onrender.com/v1`
 3. Deploy. The frontend will connect via REST and WebSocket to the Render backend.
 
 ### Post-deploy validation
 
 ```bash
 # Health check
-curl https://aegis-scanner-backend.onrender.com/v1/health
+curl https://aegis-scanner-api.onrender.com/v1/health
 
 # Detailed health (memory, CPU, uptime)
-curl https://aegis-scanner-backend.onrender.com/v1/health/detailed
+curl https://aegis-scanner-api.onrender.com/v1/health/detailed
 
 # Metrics
-curl https://aegis-scanner-backend.onrender.com/v1/metrics
+curl https://aegis-scanner-api.onrender.com/v1/metrics
 
 # Prometheus format
-curl -H "Accept: text/plain" https://aegis-scanner-backend.onrender.com/v1/metrics
+curl -H "Accept: text/plain" https://aegis-scanner-api.onrender.com/v1/metrics
 
 # Submit a scan
-curl -X POST https://aegis-scanner-backend.onrender.com/v1/scan \
+curl -X POST https://aegis-scanner-api.onrender.com/v1/scan \
   -H "Content-Type: application/json" \
   -d '{"target":"127.0.0.1"}'
 ```

@@ -1,5 +1,5 @@
 # Render deployment configuration for the FastAPI backend.
-# Deploy as a Docker web service. Set ALLOWED_ORIGINS to the final Vercel URL.
+# Public demo scans run with the mock engine to avoid cloud scanning restrictions.
 
 services:
   - type: web
@@ -30,4 +30,4 @@ services:
       - key: AEGIS_ENABLE_VULN_SCRIPTS
         value: "false"
       - key: ALLOWED_ORIGINS
-        sync: false
+        value: https://aegis-scanner-api.vercel.app
