@@ -58,8 +58,8 @@ _check_cors_allowed() {
     local status
     status=$(echo "$headers" | head -1 | awk '{print $2}')
     local acao
-    acao=$(echo "$headers" | grep -i "access-control-allow-origin" | tr -d '\r')
-    if [ "$status" = "200" ] && echo "$acao" | grep -q "$origin"; then
+    acao=$(echo "$headers" | grep -i "access-control-allow-origin" | tr -d '\r' || true)
+    if [ "$status" = "200" ] && echo "$acao" | grep -q "$origin" 2>/dev/null; then
         _pass "$label → $acao"
     else
         _fail "$label → HTTP $status, ACAO: $acao"
